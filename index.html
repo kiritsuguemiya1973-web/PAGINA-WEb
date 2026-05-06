@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ruleta de Textos Científicos</title>
+    <style>
+        :root {
+            --primary-color: #2c3e50;
+            --secondary-color: #3498db;
+            --accent-color: #e74c3c;
+            --text-light: #ecf0f1;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f7f6;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            margin: 0;
+        }
+
+        h1 { color: var(--primary-color); margin-bottom: 10px; }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 30px;
+            max-width: 800px;
+            width: 100%;
+        }
+
+        /* Estilos de la Ruleta */
+        .wheel-wrapper {
+            position: relative;
+            width: 350px;
+            height: 350px;
+        }
+
+        #canvas {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            box-shadow: 0 0 20px rgba(0,0,0,0.2);
+            transition: transform 4s cubic-bezier(0.15, 0, 0.15, 1);
+        }
+
+        .pointer {
+            position: absolute;
+            top: -15px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 15px solid transparent;
+            border-right: 15px solid transparent;
+            border-top: 30px solid var(--accent-color);
+            z-index: 10;
+        }
+
+        /* Botón */
+        #spin-btn {
+            padding: 15px 40px;
+            font-size: 1.2rem;
+            background-color: var(--secondary-color);
+            color: white;
+            border: none;
+            border-radius: 25px;
+            cursor: pointer;
+            transition: background 0.3s;
+            font-weight: bold;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        #spin-btn:hover { background-color: #2980b9; }
+        #spin-btn:disabled { background-color: #bdc3c7; cursor: not-allowed; }
+
+        /* Cuadro de Pregunta */
+        #question-box {
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            width: 100%;
+            min-height: 150px;
+            display: none;
+            border-left: 8px solid var(--secondary-color);
+            animation: fadeIn 0.5s;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .question-text { font-weight: bold; font-size: 1.2rem; color: var(--primary-color); margin-bottom: 15px; }
+        .options { list-style: none; padding: 0; }
+        .options li { margin: 8px 0; padding: 10px; background: #f9f9f9; border-radius: 6px; }
+        .number-indicator { color: var(--accent-color); font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px; }
+
+    </style>
+</head>
+<body>
+
+    <h1>🔬 Ruleta del Saber Científico</h1>
+    
+    <div class="container">
+        <div class="wheel-wrapper">
+            <div class="pointer"></div>
+            <canvas id="canvas" width="500" height="500"></canvas>
+        </div>
+
+        <button id="spin-btn">¡GIRAR RULETA!</button>
+
+        <div id="question-box">
+            <div class="number-indicator" id="q-num">Número 1</div>
+            <div class="question-text" id="q-text">Aquí aparecerá la pregunta...</div>
+            <ul class="options" id="q-options"></ul>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const btn = document.getElementById('spin-btn');
+        const qBox = document.getElementById('question-box');
+        
+        const totalSectors = 40;
+        const centerX = canvas.width / 2;
+        const centerY = canvas.height / 2;
+        const radius = canvas.width / 2;
+        
+        let currentRotation = 0;
+
+        // Preguntas proporcionadas
+        const preguntas = [
+            { q: "¿Qué es una tipología textual científica?", o: ["Un tipo de cuento o novela", "Una clasificación de textos que comunican conocimiento objetivo y verificable", "Un formato de texto publicitario", "Un género literario poético"] },
+            { q: "¿Qué función predomina en los textos científicos?", o: ["Estética", "Referencial", "Apelativa", "Fática"] },
+            { q: "¿Cuál de estos textos NO pertenece a la tipología científica?", o: ["Artículo científico", "Monografía académica", "Cuento infantil", "Tesis doctoral"] },
+            { q: "¿Qué característica NO es propia de los textos científicos?", o: ["Objetividad", "Subjetividad y opinión personal", "Claridad y precisión", "Terminología técnica"] },
+            { q: "¿Qué tipo de texto científico se publica en revistas y presenta resultados de investigación?", o: ["Manual de usuario", "Artículo científico", "Noticia periodística", "Cuento breve"] },
+            { q: "¿Qué estructura suele seguir un artículo científico?", o: ["Título – Cuento – Final", "Introducción – Métodos – Resultados – Discusión", "Primera parte – Segunda parte", "Entrada – Desarrollo – Despedida"] },
+            { q: "¿Qué significa que un texto científico sea “verificable”?", o: ["Que cualquiera lo puede creer", "Que describe experiencias únicas", "Que sus datos y procedimientos pueden ser comprobados", "Que es legible"] },
+            { q: "¿Qué tipo de texto utiliza más lenguaje técnico y especializado?", o: ["Texto literario", "Texto científico o técnico", "Texto publicitario", "Chiste"] },
+            { q: "¿Qué es un texto técnico?", o: ["Explica sentimientos", "Explica procedimientos e instrucciones prácticas", "Humor moderno", "Poema"] },
+            { q: "¿Qué tipo de texto es un manual de instrucciones de un laboratorio?", o: ["Científico", "Técnico", "Argumentativo", "Narrativo"] },
+            { q: "¿Por qué se dice que los textos científicos son impersonales?", o: ["No mencionan personas", "Evitan la 1ra persona, usan voz pasiva o 3ra persona", "Se escriben de noche", "No tienen autor"] },
+            { q: "¿Qué elemento ayuda a aclarar la lectura en un texto científico?", o: ["Poemas", "Gráficos, tablas y fórmulas", "Dibujos artísticos", "Chistes"] },
+            { q: "¿Qué tipo de texto científico es defendido ante un tribunal académico?", o: ["Artículo", "Informe breve", "Tesis doctoral", "Nota breve"] },
+            { q: "¿Qué es un texto de divulgación científica?", o: ["Texto para expertos", "Explica temas científicos de forma sencilla para el público", "Cuento de ciencia", "Chiste"] },
+            { q: "¿Qué tipo de texto científico incluye un resumen al inicio (abstract)?", o: ["Historieta", "Artículo científico", "Folleto", "Carta"] },
+            { q: "¿Cómo puedes identificar un texto científico?", o: ["Usa muchas mayúsculas", "Presenta datos, citas y lenguaje técnico", "Dibujos bonitos", "Escrito en inglés"] },
+            { q: "¿Qué tipo de texto científico se usa para explicar los pasos de un experimento?", o: ["Artículo científico", "Manual técnico", "Informe científico", "Cualquiera de los anteriores"] },
+            { q: "¿Qué parte presenta la pregunta de investigación?", o: ["Resultados", "Discusión", "Introducción", "Bibliografía"] },
+            { q: "¿Dónde es mejor buscar un fragmento científico?", o: ["Revista de moda", "Noticias de Google", "Google Académico", "Libro de cuentos"] },
+            { q: "¿Qué elemento usarías para identificar textos en clase?", o: ["Tarjetas poéticas", "Tarjetas con fragmentos de artículos científicos", "Letras sueltas", "Nombres de animales"] }
+        ];
+
+        // Dibujar Ruleta
+        function drawWheel() {
+            const sliceAngle = (2 * Math.PI) / totalSectors;
+            for (let i = 0; i < totalSectors; i++) {
+                ctx.beginPath();
+                ctx.fillStyle = i % 2 === 0 ? '#34495e' : '#3498db';
+                ctx.moveTo(centerX, centerY);
+                ctx.arc(centerX, centerY, radius, i * sliceAngle, (i + 1) * sliceAngle);
+                ctx.fill();
+                ctx.stroke();
+
+                // Números
+                ctx.save();
+                ctx.translate(centerX, centerY);
+                ctx.rotate(i * sliceAngle + sliceAngle / 2);
+                ctx.textAlign = "right";
+                ctx.fillStyle = "white";
+                ctx.font = "bold 14px Arial";
+                ctx.fillText(i + 1, radius - 15, 5);
+                ctx.restore();
+            }
+        }
+
+        function spin() {
+            btn.disabled = true;
+            qBox.style.display = 'none';
+            
+            const extraDegrees = Math.floor(Math.random() * 360) + 1800; // Al menos 5 vueltas
+            currentRotation += extraDegrees;
+            
+            canvas.style.transform = `rotate(${currentRotation}deg)`;
+
+            setTimeout(() => {
+                btn.disabled = false;
+                
+                // Calcular el número según el ángulo final
+                const actualDegrees = currentRotation % 360;
+                const sectorAngle = 360 / totalSectors;
+                // El puntero está arriba (270 grados en el sistema de canvas)
+                let winningIndex = Math.floor((360 - actualDegrees + 270) % 360 / sectorAngle);
+                const winningNumber = (winningIndex % totalSectors) + 1;
+                
+                showQuestion(winningNumber);
+            }, 4000);
+        }
+
+        function showQuestion(num) {
+            // Como hay 20 preguntas y 40 números, hacemos que el 21 sea la pregunta 1, etc.
+            const index = (num - 1) % preguntas.length;
+            const data = preguntas[index];
+
+            document.getElementById('q-num').innerText = `Has caído en el Número ${num}`;
+            document.getElementById('q-text').innerText = data.q;
+            
+            const optionsList = document.getElementById('q-options');
+            optionsList.innerHTML = '';
+            data.o.forEach(opt => {
+                const li = document.createElement('li');
+                li.innerText = opt;
+                optionsList.appendChild(li);
+            });
+
+            qBox.style.display = 'block';
+        }
+
+        drawWheel();
+        btn.addEventListener('click', spin);
+    </script>
+</body>
+</html>
